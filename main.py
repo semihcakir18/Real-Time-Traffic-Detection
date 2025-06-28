@@ -6,14 +6,21 @@ from collections import defaultdict
 
 # --- TEMEL AYARLAR ---
 
+# Pencere adı için bir sabit tanımlıyoruz
+WINDOW_NAME = "Window"
+
 # Önceden eğitilmiş YOLOv8 modelini yüklüyoruz.
 model = YOLO("yolov8n.pt")
 
 # İşlem yapılacak video kaynağını belirtiyoruz.
-video_kaynagi = "videos/traffic.mp4"
+video_kaynagi = "videos/traffic2.mp4"
 
 # Video yakalama nesnesini oluşturuyoruz
 cap = cv2.VideoCapture(video_kaynagi)
+
+
+frame_width = int(int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) / 2)
+frame_height = int(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) / 2)
 
 # Sadece belirli nesneleri tespit etmek için bir filtre listesi oluşturuyoruz.
 # Bu projede sadece araçları sayacağımız için listeyi basitleştirebiliriz.
@@ -33,6 +40,11 @@ track_history = defaultdict(lambda: [])
 # Çizgiyi geçen nesneleri saymak için
 crossing_counter = 0
 crossed_ids = set()  # Zaten sayılmış nesne ID'lerini saklamak için
+
+# Görüntünün gösterileceği pencereyi oluşturuyoruz ve yeniden boyutlandırılabilir yapıyoruz
+cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+
+cv2.resizeWindow(WINDOW_NAME, frame_width, frame_height)
 
 # --- ANA DÖNGÜ ---
 
@@ -72,13 +84,17 @@ while True:
 
                 # Takip geçmişini güncelle
                 track = track_history[track_id]
-                track.append((float(center_x), float(center_y)))  # x, y merkez noktalarını ekle
+                track.append(
+                    (float(center_x), float(center_y))
+                )  # x, y merkez noktalarını ekle
                 if len(track) > 15:  # Geçmişi çok uzatmamak için eski noktaları sil
                     track.pop(0)
 
                 # Nesnenin takip yolunu çizdiriyoruz (görselleştirme için)
                 points = np.array(track, dtype=np.int32).reshape((-1, 1, 2))
-                cv2.polylines(frame, [points], isClosed=False, color=(230, 230, 230), thickness=2)
+                cv2.polylines(
+                    frame, [points], isClosed=False, color=(230, 230, 230), thickness=2
+                )
 
                 # --- ÇİZGİ GEÇİŞ KONTROLÜ ---
                 # Eğer nesnenin en az iki pozisyonu varsa (önceki ve şimdiki)
@@ -88,14 +104,22 @@ while True:
                     line_y = LINE_START[1]
 
                     # Nesne yukarıdan aşağıya mı geçti?
-                    if prev_point_y < line_y and curr_point_y >= line_y and track_id not in crossed_ids:
+                    if (
+                        prev_point_y < line_y
+                        and curr_point_y >= line_y
+                        and track_id not in crossed_ids
+                    ):
                         # Sadece çizginin x ekseni aralığındaki geçişleri say
                         if LINE_START[0] < center_x < LINE_END[0]:
                             crossed_ids.add(track_id)
                             crossing_counter += 1
 
                     # Nesne aşağıdan yukarıya mı geçti? (İsteğe bağlı, yönlü sayım için)
-                    elif prev_point_y > line_y and curr_point_y <= line_y and track_id not in crossed_ids:
+                    elif (
+                        prev_point_y > line_y
+                        and curr_point_y <= line_y
+                        and track_id not in crossed_ids
+                    ):
                         if LINE_START[0] < center_x < LINE_END[0]:
                             crossed_ids.add(track_id)
                             crossing_counter += 1
@@ -103,7 +127,15 @@ while True:
                 # Nesnenin etrafına bir daire çizerek merkezini gösteriyoruz
                 cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
                 # Takip ID'sini yazdırıyoruz
-                cv2.putText(frame, f"ID:{track_id}", (center_x, center_y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(
+                    frame,
+                    f"ID:{track_id}",
+                    (center_x, center_y - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 255, 255),
+                    2,
+                )
 
     # --- GÖRSELLEŞTİRME ---
 
@@ -111,13 +143,22 @@ while True:
     cv2.line(frame, LINE_START, LINE_END, (0, 255, 0), 3)
 
     # Geçen araç sayısını ekrana yazdırıyoruz
-    cv2.putText(frame, f"Gecen Arac Sayisi: {crossing_counter}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3, cv2.LINE_AA)
+    cv2.putText(
+        frame,
+        f"Gecen Arac Sayisi: {crossing_counter}",
+        (50, 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2,
+        (0, 0, 255),
+        3,
+        cv2.LINE_AA,
+    )
 
     # İşlenmiş kareyi ekranda gösteriyoruz
-    cv2.imshow("Gerçek Zamanlı Trafik Analizi", frame)
+    cv2.imshow(WINDOW_NAME, frame)
 
-    # 'q' tuşuna basıldığında döngüden çıkılmasını sağlıyoruz
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord("q") or cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
         break
 
 # --- TEMİZLİK ---
